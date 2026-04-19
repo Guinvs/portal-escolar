@@ -6,6 +6,13 @@
     <title>Projeto Extensão</title>
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      @media (max-width: 768px) {
+        .fc .fc-toolbar { flex-direction: column; gap: 8px; }
+        .fc .fc-toolbar-title { font-size: 1rem; }
+        .fc .fc-button { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+      }
+    </style>
 </head>
 
 <body>
@@ -34,7 +41,7 @@
   <!-- BOAS-VINDAS -->
   <div class="p-4 mb-4 bg-light rounded-3">
     <h1 class="h3">Bem-vindo ao Portal Escolar</h1>
-    <p>Central de comunicação e organização de informações da instituição.</p>
+    <p class="mb-0">Central de comunicação e organização de informações da instituição.</p>
   </div>
 
   <!-- AVISOS -->
@@ -46,17 +53,17 @@
       <div class="card-body">
         <h5 class="card-title">➕ Novo Aviso</h5>
         <div class="row g-2">
-          <div class="col-md-5">
+          <div class="col-12 col-md-5">
             <input type="text" id="avisoTitulo" class="form-control" placeholder="Título do aviso">
           </div>
-          <div class="col-md-4">
+          <div class="col-12 col-md-4">
             <input type="text" id="avisoDescricao" class="form-control" placeholder="Descrição (opcional)">
           </div>
-          <div class="col-md-3">
+          <div class="col-12 col-md-3">
             <input type="date" id="avisoData" class="form-control">
           </div>
           <div class="col-12">
-            <button onclick="adicionarAviso()" class="btn btn-primary">Adicionar Aviso</button>
+            <button onclick="adicionarAviso()" class="btn btn-primary w-100 w-md-auto">Adicionar Aviso</button>
           </div>
         </div>
         <div id="mensagemAviso" class="mt-2"></div>
@@ -81,7 +88,7 @@
   <section id="agenda" class="mb-5">
     <h2 class="mb-3">📅 Agenda</h2>
     <div class="card">
-      <div class="card-body">
+      <div class="card-body p-1 p-md-3">
         <div id="calendar"></div>
       </div>
     </div>
@@ -92,8 +99,8 @@
     <h2 class="mb-3">📞 Contato</h2>
     <div class="card">
       <div class="card-body">
-        <p>Email: escolahorizonte@.com</p>
-        <p>Telefone: (16) 3456-7890</p>
+        <p class="mb-1">Email: escolahorizonte@.com</p>
+        <p class="mb-0">Telefone: (16) 3456-7890</p>
       </div>
     </div>
   </section>
@@ -109,11 +116,12 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     const calendarEl = document.getElementById('calendar');
+    const isMobile = window.innerWidth < 768;
 
     window.calendar = new FullCalendar.Calendar(calendarEl, {
-      initialView: 'dayGridMonth',
+      initialView: isMobile ? 'listMonth' : 'dayGridMonth', // ✅ lista no celular
       locale: 'pt-br',
-      height: 500,
+      height: isMobile ? 400 : 500, // ✅ altura menor no celular
       buttonText: {
         today: 'Hoje',
         month: 'Mês',
@@ -121,80 +129,78 @@
         day: 'Dia',
         list: 'Lista'
       },
+      headerToolbar: {
+        left: isMobile ? 'prev,next' : 'prev,next today',
+        center: 'title',
+        right: isMobile ? 'dayGridMonth,listMonth' : 'dayGridMonth,timeGridWeek,listMonth'
+      },
       events: []
     });
 
     window.calendar.render();
-    carregarAvisos(); // ✅ chama APÓS o calendário estar pronto
+    carregarAvisos();
   });
 
   async function adicionarAviso() {
-  const titulo = document.getElementById('avisoTitulo').value.trim();
-  const descricao = document.getElementById('avisoDescricao').value.trim();
-  const data = document.getElementById('avisoData').value;
-  const mensagem = document.getElementById('mensagemAviso');
+    const titulo = document.getElementById('avisoTitulo').value.trim();
+    const descricao = document.getElementById('avisoDescricao').value.trim();
+    const data = document.getElementById('avisoData').value;
+    const mensagem = document.getElementById('mensagemAviso');
 
-  if (!titulo || !data) {
-    mensagem.innerHTML = '<span class="text-danger">⚠️ Preencha pelo menos o título e a data.</span>';
-    return;
+    if (!titulo || !data) {
+      mensagem.innerHTML = '<span class="text-danger">⚠️ Preencha pelo menos o título e a data.</span>';
+      return;
+    }
+
+    const res = await fetch("https://portalescolar-kgtz.onrender.com/avisos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ titulo, descricao, data })
+    });
+
+    const aviso = await res.json();
+    const [ano, mes, dia] = aviso.data.split('T')[0].split('-');
+    const dataFormatada = `${dia}/${mes}/${ano}`;
+
+    window.calendar.addEvent({
+      id: String(aviso.id),
+      title: aviso.titulo,
+      date: aviso.data.split('T')[0]
+    });
+
+    const listaAvisos = document.getElementById('listaAvisos');
+    const card = document.createElement('div');
+    card.className = 'card mb-2 border-success';
+    card.id = 'aviso-' + aviso.id;
+    card.innerHTML = `
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div class="flex-grow-1 me-2">
+          <h5 class="card-title">${aviso.titulo}</h5>
+          <p class="card-text">${aviso.descricao ? aviso.descricao + '<br>' : ''}<small class="text-muted">📅 ${dataFormatada}</small></p>
+        </div>
+        <button onclick="removerAviso(${aviso.id})" class="btn btn-sm btn-outline-danger flex-shrink-0">🗑️</button>
+      </div>
+    `;
+    listaAvisos.appendChild(card);
+
+    document.getElementById('avisoTitulo').value = '';
+    document.getElementById('avisoDescricao').value = '';
+    document.getElementById('avisoData').value = '';
+    mensagem.innerHTML = '<span class="text-success">✅ Aviso adicionado com sucesso!</span>';
+    setTimeout(() => mensagem.innerHTML = '', 3000);
   }
 
-  // ✅ Salva no banco
-  const res = await fetch("https://portalescolar-kgtz.onrender.com/avisos", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ titulo, descricao, data })
-  });
+  async function removerAviso(id) {
+    await fetch(`https://portalescolar-kgtz.onrender.com/avisos/${id}`, {
+      method: "DELETE"
+    });
 
-  const aviso = await res.json();
+    const evento = window.calendar.getEventById(String(id));
+    if (evento) evento.remove();
 
-  const [ano, mes, dia] = aviso.data.split('T')[0].split('-');
-  const dataFormatada = `${dia}/${mes}/${ano}`;
-
-  // ✅ Adiciona no calendário
-  window.calendar.addEvent({
-    id: String(aviso.id),
-    title: aviso.titulo,
-    date: aviso.data.split('T')[0]
-  });
-
-  // ✅ Adiciona na lista
-  const listaAvisos = document.getElementById('listaAvisos');
-  const card = document.createElement('div');
-  card.className = 'card mb-2 border-success';
-  card.id = 'aviso-' + aviso.id;
-  card.innerHTML = `
-    <div class="card-body d-flex justify-content-between align-items-start">
-      <div>
-        <h5 class="card-title">${aviso.titulo}</h5>
-        <p class="card-text">${aviso.descricao ? aviso.descricao + '<br>' : ''}<small class="text-muted">📅 ${dataFormatada}</small></p>
-      </div>
-      <button onclick="removerAviso(${aviso.id})" class="btn btn-sm btn-outline-danger ms-2">🗑️ Remover</button>
-    </div>
-  `;
-  listaAvisos.appendChild(card);
-
-  document.getElementById('avisoTitulo').value = '';
-  document.getElementById('avisoDescricao').value = '';
-  document.getElementById('avisoData').value = '';
-  mensagem.innerHTML = '<span class="text-success">✅ Aviso adicionado com sucesso!</span>';
-  setTimeout(() => mensagem.innerHTML = '', 3000);
-}
-
-async function removerAviso(id) {
-  // ✅ Remove do banco
-  await fetch(`https://portalescolar-kgtz.onrender.com/avisos/${id}`, {
-    method: "DELETE"
-  });
-
-  // ✅ Remove do calendário
-  const evento = window.calendar.getEventById(String(id));
-  if (evento) evento.remove();
-
-  // ✅ Remove da lista
-  const card = document.getElementById('aviso-' + id);
-  if (card) card.remove();
-}
+    const card = document.getElementById('aviso-' + id);
+    if (card) card.remove();
+  }
 </script>
 
 </body>
